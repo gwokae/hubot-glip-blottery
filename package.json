@@ -8,6 +8,8 @@
     "start": "bin/hubot -a glip"
   },
   "dependencies": {
+    "bulls-and-cows": "file:/Users/leonard.lin/workspace/bulls-and-cows",
+    "glip-client": "^0.4.7",
     "hubot": "^2.19.0",
     "hubot-diagnostics": "0.0.1",
     "hubot-glip": "^2.0.2",
@@ -20,9 +22,9 @@
     "hubot-redis-brain": "0.0.3",
     "hubot-rules": "^0.1.1",
     "hubot-scripts": "^2.17.2",
-    "hubot-shipit": "^0.2.0",
+    "hubot-shipit": "^0.2.0"
   },
   "engines": {
-    "node": "0.10.x"
+    "node": "6.9.5"
   }
 }
