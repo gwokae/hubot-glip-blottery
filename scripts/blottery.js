@@ -153,6 +153,76 @@ module.exports = function(robot) {
       res.reply(showHistory(res));
     });
 
+    // bride
+    robot.hear(/.*bride.*?\s([0-9]+).*/i, function(res){
+      if (isMessageFromMyself(res)) return;
+
+      let userId = getUserFromRes(res);
+      let game = db.games[userId];
+
+      if(game && !game.isCompleted()) {
+        let amount = parseInt(res.match[1], 10);
+        if(checkCoin(res, amount)) {
+          let user = db.users[getUserFromRes(res)];
+          user.coin -= amount;
+          let rate = amount / GAME_COIN_GOOD;
+          let digitsUnlocked = Math.floor(GAME_DIGITS * rate);
+          res.reply(`The hint is ${shadow(game, digitsUnlocked)}, your balance is ${user.coin}`)
+        }
+      } else {
+        res.reply('You are not playing game!')
+      }
+    });
+
+    // buy lottery
+    robot.hear(/.*buy.+lottery.*/i, function(res){
+      if (isMessageFromMyself(res)) return;
+
+      let amount = GAME_LOTTERY_PRICE;
+      if(checkCoin(res, GAME_LOTTERY_PRICE)) {
+        let user = db.users[getUserFromRes(res)];
+        user.coin -= amount;
+        let sn = ++ticketSerial;
+        user.tickets.push(sn);
+        res.reply(`You brought lottery #${sn}. You have ${user.tickets.length} lottery(ies), balance ${user.coin}`);
+      }
+    });
+
+    // my lottery
+    robot.hear(/.*my.+lottery.*/i, function(res){
+      if (isMessageFromMyself(res)) return;
+
+      let user = db.users[getUserFromRes(res)];
+      if (!user) {
+        res.reply(`You never play any game`);
+      } if (user.tickets.length === 0) {
+        res.reply(`You have no lottery.`);
+      } else {
+        let msg = 'You have lottery(ies): ' + user.tickets.map(id => '#' + id ).join(', ');
+        res.reply(msg);
+      }
+    });
+
+    robot.hear(/.*my.+coin.*/i, function(res){
+      if (isMessageFromMyself(res)) return;
+
+      let user = db.users[getUserFromRes(res)];
+      if (user) {
+        res.reply(`You have ${user.coin} coins.`);
+      } else {
+        res.reply(`You never play any game`);
+      }
+    });
+
+    robot.hear(/cheese steak jimmy's/i, function(res){
+      if (isMessageFromMyself(res)) return;
+
+      let userId = getUserFromRes(res);
+      if (!db.users[userId]) db.users[userId] = initUser();
+
+      db.users[userId].coin += 1000;
+      res.reply(`You must be a big fan of Age Of Empire 2. ❤️`);
+    });
   }
 
   function initUser() {
@@ -170,5 +240,28 @@ module.exports = function(robot) {
 
     let rate = (attempt - GAME_GOOD_ATTEMPTS) / GOOD_BAD_ATTEMPT_DIFF;
     return Math.round(GOOD_BAD_COIN_DIFF * rate);
+  }
+
+  function checkCoin(res, amount) {
+    let user = db.users[getUserFromRes(res)];
+    if(amount > user.coin) {
+      res.reply(`You don't have enough coin. You need ${amount}. But you only have ${user.coin}.`)
+      return false;
+    }
+
+    return true;
+  }
+  let shadowList = ['❍', '⚀', '🀚' , 'ⅲ', '🍀', 'Ⅴ', 'ⅵ', 'ⅶ', '𐄗', 'ⅸ'];
+  function shadow(game, digitsUnlocked) {
+    let correctAns = game.cheat();
+    let res = '';
+    for(let i = 0; i < correctAns.length; i++) {
+      if (i < digitsUnlocked) {
+        res += shadowList[correctAns[i]];
+      } else {
+        res += '❓';
+      }
+    }
+    return res;
   }
 }
