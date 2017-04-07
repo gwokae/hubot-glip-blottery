@@ -49,11 +49,28 @@ module.exports = function(robot) {
     return !isPrivateRoom;
   }
 
+  function showHint({bulls, cows}) {
+    return `${bulls}A${cows}B`;
+  }
+
+  function showHistory(res) {
+    let game = db.games[getUserFromRes(res)];
+    if (game) {
+      let { history } = game.show();
+      if (history && history.length > 0) {
+        let msg = history.map((item, idx) => `Apptmpt #${idx+1}: **${item.ans}** ⇒ **${showHint(item)}** ${item.isCorrect ? '✅' : '❎'}`);
+        return msg.join('\n');
+      } else {
+        return `You don't have any attempt, please send ${gameDigits} digits number to guess`;
+      }
+    } else {
+      return 'Oops, it seems you don\'t play game now. You can **play a game**' ;
+    }
+  }
+
 
   function initRobot(){
-    // TODO: implement give up
-    // TODO: implement history
-    robot.hear(/.*play.*game.*/i, function(res){
+    robot.hear(/.*play.+game.*/i, function(res){
       if (isMessageFromMyself(res)) {
         return;
       }
@@ -67,14 +84,12 @@ module.exports = function(robot) {
         res.reply('You already create a game. Do you wanna **give up** ?');
       } else {
         let theAns = Game.generate(gameDigits);
-        console.log('You might need this', theAns);
+        console.log('You might need this ⇒⇒⇒⇒⇒⇒⇒', theAns);
         db.games[getUserFromRes(res)] = Game.newGame(theAns);
-        res.reply(`Your game had been started. Please typing ${gameDigits} digits number to guess`);
+        res.reply(`Your game had been started. Please send ${gameDigits} digits number to guess`);
       }
     });
 
-
-    //
     robot.hear(new RegExp(`^[0-9]{${gameDigits}}$`), function(res) {
       if (!checkPrivateRoom(res)) {
         return;
@@ -86,17 +101,35 @@ module.exports = function(robot) {
           res.reply('You already win your last game. Do you want to **play another game** or check the **history**?');
         } else {
           let result = game.guess(res.match[0]);
-          let {hint: {ans, bulls, cows}} = result;
+          let {hint} = result;
           if (result.completed) {
             // todo: show more info
-            res.reply(`Your answer, ${ans}, is correct! **${bulls}A${cows}B**`);
+            res.reply(`Your answer, ${hint.ans}, is correct! **${showHint(hint)}**\n\n${showHistory(res)}`);
           } else {
-            res.reply(`Your attempt, ${ans}, is **${bulls}A${cows}B**`)
+            res.reply(`Your attempt, ${hint.ans}, is **${showHint(hint)}**`)
           }
         }
         return;
       }
       res.reply('Do you want to **play a game** ?');
     });
+
+    robot.hear(/.*give.+up.*/i, function(res){
+      if (isMessageFromMyself(res)) return;
+
+      if (db.games[getUserFromRes(res)]) {
+        db.games[getUserFromRes(res)] = null;
+        res.reply('You already give up for last game. If you want to **play another game** please tell me?');
+      } else {
+        res.reply('Oops, it seems you don\'t play game now. You can **play a game**' );
+      }
+    });
+
+    robot.hear(/.*history.*/i, function(res){
+      if (isMessageFromMyself(res)) return;
+
+      res.reply(showHistory(res));
+    });
+
   }
 }
