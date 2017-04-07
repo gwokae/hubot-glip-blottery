@@ -20,6 +20,7 @@ module.exports = function(robot) {
   let currentUser;
   let db = { games: {}, users: {} };
   let ticketSerial = 0;
+  let ticketWon = [];
   gc.authorize({
       username: process.env.HUBOT_GLIP_USERNAME,
       extension: process.env.HUBOT_GLIP_EXTENSION,
@@ -60,7 +61,7 @@ module.exports = function(robot) {
   }
 
   function showHistory(res) {
-    let game = db.games[getUserFromRes(res)];
+    let game = db.games[getUserFromRes(res).id];
     if (game) {
       let { history } = game.show();
       if (history && history.length > 0) {
@@ -86,7 +87,7 @@ module.exports = function(robot) {
         return;
       }
 
-      let userId = getUserFromRes(res)
+      let { id: userId } = getUserFromRes(res);
       let game = db.games[userId];
       if (game && !game.isCompleted()) {
         res.reply('You already create a game. Do you wanna **give up** ?');
@@ -106,7 +107,7 @@ module.exports = function(robot) {
         return;
       }
 
-      let userId = getUserFromRes(res);
+      let { id: userId } = getUserFromRes(res);
       let game = db.games[userId];
       if(game) {
         if (game.isCompleted()) {
@@ -138,8 +139,8 @@ module.exports = function(robot) {
     robot.hear(/.*give.+up.*/i, function(res){
       if (isMessageFromMyself(res)) return;
 
-      if (db.games[getUserFromRes(res)]) {
-        db.games[getUserFromRes(res)] = null;
+      if (db.games[getUserFromRes(res).id]) {
+        db.games[getUserFromRes(res).id] = null;
         res.reply('You already give up for last game. If you want to **play another game** please tell me?');
       } else {
         res.reply('Oops, it seems you don\'t play game now. You can **play a game**' );
@@ -157,13 +158,13 @@ module.exports = function(robot) {
     robot.hear(/.*bride.*?\s([0-9]+).*/i, function(res){
       if (isMessageFromMyself(res)) return;
 
-      let userId = getUserFromRes(res);
+      let { id: userId } = getUserFromRes(res);
       let game = db.games[userId];
 
       if(game && !game.isCompleted()) {
         let amount = parseInt(res.match[1], 10);
         if(checkCoin(res, amount)) {
-          let user = db.users[getUserFromRes(res)];
+          let user = db.users[getUserFromRes(res).id];
           user.coin -= amount;
           let rate = amount / GAME_COIN_GOOD;
           let digitsUnlocked = Math.floor(GAME_DIGITS * rate);
@@ -180,7 +181,7 @@ module.exports = function(robot) {
 
       let amount = GAME_LOTTERY_PRICE;
       if(checkCoin(res, GAME_LOTTERY_PRICE)) {
-        let user = db.users[getUserFromRes(res)];
+        let user = db.users[getUserFromRes(res).id];
         user.coin -= amount;
         let sn = ++ticketSerial;
         user.tickets.push(sn);
@@ -192,7 +193,7 @@ module.exports = function(robot) {
     robot.hear(/.*my.+lottery.*/i, function(res){
       if (isMessageFromMyself(res)) return;
 
-      let user = db.users[getUserFromRes(res)];
+      let user = db.users[getUserFromRes(res).id];
       if (!user) {
         res.reply(`You never play any game`);
       } if (user.tickets.length === 0) {
@@ -206,7 +207,7 @@ module.exports = function(robot) {
     robot.hear(/.*my.+coin.*/i, function(res){
       if (isMessageFromMyself(res)) return;
 
-      let user = db.users[getUserFromRes(res)];
+      let user = db.users[getUserFromRes(res).id];
       if (user) {
         res.reply(`You have ${user.coin} coins.`);
       } else {
@@ -217,11 +218,41 @@ module.exports = function(robot) {
     robot.hear(/cheese steak jimmy's/i, function(res){
       if (isMessageFromMyself(res)) return;
 
-      let userId = getUserFromRes(res);
+      let { id: userId } = getUserFromRes(res);
       if (!db.users[userId]) db.users[userId] = initUser();
 
       db.users[userId].coin += 1000;
       res.reply(`You must be a big fan of Age Of Empire 2. ❤️`);
+    });
+
+    robot.hear(/i'm the boss/i, function(res){
+      if (isMessageFromMyself(res)) return;
+
+      let { id: userId } = getUserFromRes(res);
+      if (!db.users[userId]) db.users[userId] = initUser();
+      db.users[userId].super = true;
+
+      res.reply(`You have been grant super user privilege!`);
+    });
+
+    robot.hear(/(.+) lucky draw/i, function(res){
+      if (isMessageFromMyself(res)) return;
+
+      let { id: userId } = getUserFromRes(res);
+      let user = db.users[userId];
+      if (user && user.super) {
+          res.reply(`Lucky draw from ${ticketSerial - ticketWon.length} lotteries`)
+
+          setTimeout(draw.bind(null, res, res.match[1]), Math.random() * 2000);
+      } else {
+        res.reply(`You don't have super user privilege!`);
+      }
+    });
+
+    robot.hear(/show rank/i, function(res){
+      if (isMessageFromMyself(res)) return;
+
+      res.reply(`We have ${ticketSerial - ticketWon.length} lotteries in the ballot`);
     });
   }
 
@@ -243,7 +274,7 @@ module.exports = function(robot) {
   }
 
   function checkCoin(res, amount) {
-    let user = db.users[getUserFromRes(res)];
+    let user = db.users[getUserFromRes(res).id];
     if(amount > user.coin) {
       res.reply(`You don't have enough coin. You need ${amount}. But you only have ${user.coin}.`)
       return false;
@@ -263,5 +294,29 @@ module.exports = function(robot) {
       }
     }
     return res;
+  }
+
+  function draw(res, itemName) {
+    if( ticketSerial - ticketWon.length === 0 ){
+      res.reply(`No winner. Due to no lottery in the ballot`)
+    } else {
+      let rnd = Math.round(Math.random() * ticketSerial);
+      if (rnd === 0 || ticketWon.indexOf(rnd) !== -1) {
+        draw(res, itemName);
+      } else {
+        ticketWon.push(rnd);
+        let userId = Object.keys(db.users).find(userId => {
+          let user = db.users[userId];
+          let idx = user.tickets.indexOf(rnd);
+          if(idx !== -1) {
+            user.tickets.splice(idx, 1);
+            return true;
+          }
+        });
+        getUser(userId).then(function(user){
+          res.reply(`The lottery #${rnd} owned by **@${user.firstName} ${user.lastName}** won **${itemName}**`);
+        });
+      }
+    }
   }
 }
