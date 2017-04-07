@@ -1,7 +1,12 @@
 const Game = require('bulls-and-cows');
-const gameDigits = (function(digit){
+const GAME_DIGITS = (function(digit){
   return (digit > 0 && digit <= 10) ? digit : 4;
 })(parseInt(process.env.GAME_DIGITS, 10));
+const GAME_COIN_GOOD = 100;
+const GAME_COIN_BAD = 10;
+const GAME_GOOD_ATTEMPTS = 8;
+const GAME_BAD_ATTEMPTS = 20;
+const GAME_LOTTERY_PRICE = 100;
 const GlipClient = require('glip-client')
 const gc = new GlipClient({
   server: process.env.HUBOT_GLIP_SERVER, // https://platform.ringcentral.com for production or https://platform.devtest.ringcentral.com for sandbox
@@ -14,6 +19,7 @@ const gc = new GlipClient({
 module.exports = function(robot) {
   let currentUser;
   let db = { games: {}, users: {} };
+  let ticketSerial = 0;
   gc.authorize({
       username: process.env.HUBOT_GLIP_USERNAME,
       extension: process.env.HUBOT_GLIP_EXTENSION,
@@ -58,10 +64,10 @@ module.exports = function(robot) {
     if (game) {
       let { history } = game.show();
       if (history && history.length > 0) {
-        let msg = history.map((item, idx) => `Apptmpt #${idx+1}: **${item.ans}** ⇒ **${showHint(item)}** ${item.isCorrect ? '✅' : '❎'}`);
+        let msg = history.map((item, idx) => `Attempt #${idx+1}: **${item.ans}** ⇒ **${showHint(item)}** ${item.isCorrect ? '✅' : '❎'}`);
         return msg.join('\n');
       } else {
-        return `You don't have any attempt, please send ${gameDigits} digits number to guess`;
+        return `You don't have any attempt, please send ${gameDigits} digits of number to guess`;
       }
     } else {
       return 'Oops, it seems you don\'t play game now. You can **play a game**' ;
@@ -70,6 +76,7 @@ module.exports = function(robot) {
 
 
   function initRobot(){
+    // new game
     robot.hear(/.*play.+game.*/i, function(res){
       if (isMessageFromMyself(res)) {
         return;
@@ -79,32 +86,45 @@ module.exports = function(robot) {
         return;
       }
 
-      let game = db.games[getUserFromRes(res)];
+      let userId = getUserFromRes(res)
+      let game = db.games[userId];
       if (game && !game.isCompleted()) {
         res.reply('You already create a game. Do you wanna **give up** ?');
       } else {
-        let theAns = Game.generate(gameDigits);
+        let theAns = Game.generate(GAME_DIGITS);
         console.log('You might need this ⇒⇒⇒⇒⇒⇒⇒', theAns);
-        db.games[getUserFromRes(res)] = Game.newGame(theAns);
-        res.reply(`Your game had been started. Please send ${gameDigits} digits number to guess`);
+        db.games[userId] = Game.newGame(theAns);
+        if(!db.users[userId]) db.users[userId] = initUser();
+        db.users[userId].counts.game++;
+        res.reply(`Your game had been started. Please send ${GAME_DIGITS} digits number to guess`);
       }
     });
 
-    robot.hear(new RegExp(`^[0-9]{${gameDigits}}$`), function(res) {
+    // guess
+    robot.hear(new RegExp(`^[0-9]{${GAME_DIGITS}}$`), function(res) {
       if (!checkPrivateRoom(res)) {
         return;
       }
 
-      let game = db.games[getUserFromRes(res)];
+      let userId = getUserFromRes(res);
+      let game = db.games[userId];
       if(game) {
         if (game.isCompleted()) {
           res.reply('You already win your last game. Do you want to **play another game** or check the **history**?');
         } else {
           let result = game.guess(res.match[0]);
           let {hint} = result;
+          let user = db.users[userId];
+          let { counts } = user;
+
+          counts.attempt++;
           if (result.completed) {
-            // todo: show more info
-            res.reply(`Your answer, ${hint.ans}, is correct! **${showHint(hint)}**\n\n${showHistory(res)}`);
+            counts.win++;
+
+            let attempt = game.show().history.length;
+            let coinEarned = calcCoin(attempt);
+            user.coin += coinEarned;
+            res.reply(`Your answer, ${hint.ans}, is correct. **You win** the game! \n\n**Result:** \nAttempt(s): ${attempt} \nEarned: ${coinEarned} coin \nBalance: ${user.coin} coin. \n\nDo you want to **play another game** or check the **history**?`);
           } else {
             res.reply(`Your attempt, ${hint.ans}, is **${showHint(hint)}**`)
           }
@@ -114,6 +134,7 @@ module.exports = function(robot) {
       res.reply('Do you want to **play a game** ?');
     });
 
+    // give up
     robot.hear(/.*give.+up.*/i, function(res){
       if (isMessageFromMyself(res)) return;
 
@@ -125,11 +146,29 @@ module.exports = function(robot) {
       }
     });
 
+    // game history
     robot.hear(/.*history.*/i, function(res){
       if (isMessageFromMyself(res)) return;
 
       res.reply(showHistory(res));
     });
 
+  }
+
+  function initUser() {
+    return { counts: {game: 0, win: 0, attempt: 0}, coin: 0, tickets: [] };
+  }
+
+  const GOOD_BAD_ATTEMPT_DIFF = GAME_BAD_ATTEMPTS - GAME_GOOD_ATTEMPTS;
+  const GOOD_BAD_COIN_DIFF = GAME_COIN_GOOD - GAME_COIN_BAD;
+  function calcCoin(attempt) {
+    if (attempt <= GAME_GOOD_ATTEMPTS) {
+      return GAME_COIN_GOOD;
+    } else if ( attempt >= GAME_BAD_ATTEMPTS) {
+      return GAME_COIN_BAD;
+    }
+
+    let rate = (attempt - GAME_GOOD_ATTEMPTS) / GOOD_BAD_ATTEMPT_DIFF;
+    return Math.round(GOOD_BAD_COIN_DIFF * rate);
   }
 }
