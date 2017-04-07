@@ -252,7 +252,43 @@ module.exports = function(robot) {
     robot.hear(/show rank/i, function(res){
       if (isMessageFromMyself(res)) return;
 
-      res.reply(`We have ${ticketSerial - ticketWon.length} lotteries in the ballot`);
+      let msg = `We have ${ticketSerial - ticketWon.length} lotteries in the ballot`;
+
+      // richest
+      let richest = Object.keys(db.users).sort((a, b) => db.users[a].coin - db.users[b].coin).slice(0, 10);
+
+      // the most tickets
+      let ticketOwner = Object.keys(db.users).sort((a, b) => db.users[a].tickets.length - db.users[b].tickets.length).slice(0, 10);
+
+      let userIds = (function(arr){
+        let tmp = {};
+        arr.forEach(item => tmp[item] = '');
+        return Object.keys(tmp);
+      })(richest.concat(ticketOwner));
+
+      if (userIds.length !== 0) {
+        Promise.all( userIds.map( userId => getUser(userId)) ).then(users => {
+          if (richest.length !== 0) {
+            msg += '\n\n**Richest:**\n';
+            msg += richest.map( (userId, idx) => {
+              let user = users[userIds.indexOf(userId)];
+              return `**#${idx + 1}** ${user.firstName} ${user.lastName}: ${db.users[userId].coin} coin`
+            }).join('\n');
+          }
+
+          if (ticketOwner.length !== 0) {
+            msg += '\n\n**Lottery Owner:**\n';
+            msg += ticketOwner.map( (userId, idx) => {
+              let user = users[userIds.indexOf(userId)];
+              return `**#${idx + 1}** ${user.firstName} ${user.lastName}: ${db.users[userId].tickets.length} lotteries`
+            }).join('\n');
+          }
+
+          res.reply(msg);
+        });
+      } else {
+        res.reply(msg);
+      }
     });
   }
 
