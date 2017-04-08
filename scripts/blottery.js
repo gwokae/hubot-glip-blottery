@@ -34,9 +34,11 @@ module.exports = function(robot) {
     });
 
   function getUser(personId){
-    return gc.persons().get({ personId: personId }).then(function(user){
-      return user;
-    })
+    return gc.persons().get({ personId: personId });
+  }
+
+  function getGroup(groupId){
+    return gc.groups().get({ groupId: groupId });
   }
 
   function isMessageFromMyself(res) {
@@ -48,12 +50,14 @@ module.exports = function(robot) {
   }
 
   function checkPrivateRoom (res) {
-    // TODO: implement
-    let isPrivateRoom = false;
-    if (isPrivateRoom) {
-      res.reply('You should not playing game in a public group!!')
-    }
-    return !isPrivateRoom;
+    return getGroup(res.message.room)
+      .then(function(group) {
+        return group.members.length <= 2
+      })
+      .then(function(isPrivateRoom) {
+        if(!isPrivateRoom) res.reply('You should not playing game in a public group. Please chat with me in privately.');
+        return isPrivateRoom;
+      })
   }
 
   function showHint({bulls, cows}) {
@@ -65,8 +69,8 @@ module.exports = function(robot) {
     if (game) {
       let { history } = game.show();
       if (history && history.length > 0) {
-        let msg = history.map((item, idx) => `Attempt #${idx+1}: **${item.ans}** ⇒ **${showHint(item)}** ${item.isCorrect ? '✅' : '❎'}`);
-        return msg.join('\n');
+        let msg = history.map((item, idx) => `|#${idx+1}|**${item.ans}**|**${showHint(item)}**|${item.isCorrect ? '✅' : '❎'}|`);
+        return '|Attempt|Guess|Hint|Status|\n' + msg.join('\n');
       } else {
         return `You don't have any attempt, please send ${gameDigits} digits of number to guess`;
       }
@@ -83,156 +87,188 @@ module.exports = function(robot) {
         return;
       }
 
-      if (!checkPrivateRoom(res)) {
-        return;
-      }
-
-      let { id: userId } = getUserFromRes(res);
-      let game = db.games[userId];
-      if (game && !game.isCompleted()) {
-        res.reply('You already create a game. Do you wanna **give up** ?');
-      } else {
-        let theAns = Game.generate(GAME_DIGITS);
-        console.log('You might need this ⇒⇒⇒⇒⇒⇒⇒', theAns);
-        db.games[userId] = Game.newGame(theAns);
-        if(!db.users[userId]) db.users[userId] = initUser();
-        db.users[userId].counts.game++;
-        res.reply(`Your game had been started. Please send ${GAME_DIGITS} digits number to guess`);
-      }
+      checkPrivateRoom(res).then(function(isPrivateRoom) {
+        if (isPrivateRoom) {
+          let { id: userId } = getUserFromRes(res);
+          let game = db.games[userId];
+          if (game && !game.isCompleted()) {
+            res.reply('You already create a game. Do you wanna **give up** ?');
+          } else {
+            let theAns = Game.generate(GAME_DIGITS);
+            console.log('You might need this ⇒⇒⇒⇒⇒⇒⇒', theAns);
+            db.games[userId] = Game.newGame(theAns);
+            if(!db.users[userId]) db.users[userId] = initUser();
+            db.users[userId].counts.game++;
+            res.reply(`Your game had been started. Please send ${GAME_DIGITS} digits number to guess`);
+          }
+        }
+      });
     });
 
     // guess
     robot.hear(new RegExp(`^[0-9]{${GAME_DIGITS}}$`), function(res) {
-      if (!checkPrivateRoom(res)) {
-        return;
-      }
+      checkPrivateRoom(res).then(function(isPrivateRoom) {
+        if (isPrivateRoom) {
+          let { id: userId } = getUserFromRes(res);
+          let game = db.games[userId];
+          if(game) {
+            if (game.isCompleted()) {
+              res.reply('You already win your last game. Do you want to **play another game** or check the **history**?');
+            } else {
+              let result = game.guess(res.match[0]);
+              let {hint} = result;
+              let user = db.users[userId];
+              let { counts } = user;
 
-      let { id: userId } = getUserFromRes(res);
-      let game = db.games[userId];
-      if(game) {
-        if (game.isCompleted()) {
-          res.reply('You already win your last game. Do you want to **play another game** or check the **history**?');
-        } else {
-          let result = game.guess(res.match[0]);
-          let {hint} = result;
-          let user = db.users[userId];
-          let { counts } = user;
+              counts.attempt++;
+              if (result.completed) {
+                counts.win++;
 
-          counts.attempt++;
-          if (result.completed) {
-            counts.win++;
-
-            let attempt = game.show().history.length;
-            let coinEarned = calcCoin(attempt);
-            user.coin += coinEarned;
-            res.reply(`Your answer, ${hint.ans}, is correct. **You win** the game! \n\n**Result:** \nAttempt(s): ${attempt} \nEarned: ${coinEarned} coin \nBalance: ${user.coin} coin. \n\nDo you want to **play another game** or check the **history**?`);
-          } else {
-            res.reply(`Your attempt, ${hint.ans}, is **${showHint(hint)}**`)
+                let attempt = game.show().history.length;
+                let coinEarned = calcCoin(attempt);
+                user.coin += coinEarned;
+                res.reply(`Your answer, ${hint.ans}, is correct. **You win** the game! \n\n**Result:** \nAttempt(s): ${attempt} \nEarned: ${coinEarned} coin \nBalance: ${user.coin} coin. \n\nDo you want to **play another game** or check the **history**?`);
+              } else {
+                res.reply(`Your attempt, ${hint.ans}, is **${showHint(hint)}**`)
+              }
+            }
+            return;
           }
+          res.reply('Do you want to **play a game** ?');
         }
-        return;
-      }
-      res.reply('Do you want to **play a game** ?');
+      });
     });
 
     // give up
     robot.hear(/.*give.+up.*/i, function(res){
       if (isMessageFromMyself(res)) return;
 
-      if (db.games[getUserFromRes(res).id]) {
-        db.games[getUserFromRes(res).id] = null;
-        res.reply('You already give up for last game. If you want to **play another game** please tell me?');
-      } else {
-        res.reply('Oops, it seems you don\'t play game now. You can **play a game**' );
-      }
+      checkPrivateRoom(res).then(function(isPrivateRoom) {
+        if (isPrivateRoom) {
+          if (db.games[getUserFromRes(res).id]) {
+            db.games[getUserFromRes(res).id] = null;
+            res.reply('You already give up for last game. If you want to **play another game** please tell me?');
+          } else {
+            res.reply('Oops, it seems you don\'t play game now. You can **play a game**' );
+          }
+        }
+      });
+
     });
 
     // game history
     robot.hear(/.*history.*/i, function(res){
       if (isMessageFromMyself(res)) return;
-
-      res.reply(showHistory(res));
+      checkPrivateRoom(res).then(function(isPrivateRoom) {
+        if (isPrivateRoom) {
+          res.reply(showHistory(res));
+        }
+      });
     });
 
     // bride
     robot.hear(/.*bride.*?\s([0-9]+).*/i, function(res){
       if (isMessageFromMyself(res)) return;
 
-      let { id: userId } = getUserFromRes(res);
-      let game = db.games[userId];
+      checkPrivateRoom(res).then(function(isPrivateRoom) {
+        if (isPrivateRoom) {
+          let { id: userId } = getUserFromRes(res);
+          let game = db.games[userId];
 
-      if(game && !game.isCompleted()) {
-        let amount = parseInt(res.match[1], 10);
-        if(checkCoin(res, amount)) {
-          let user = db.users[getUserFromRes(res).id];
-          user.coin -= amount;
-          let rate = amount / GAME_COIN_GOOD;
-          let digitsUnlocked = Math.floor(GAME_DIGITS * rate);
-          res.reply(`The hint is ${shadow(game, digitsUnlocked)}, your balance is ${user.coin}`)
+          if(game && !game.isCompleted()) {
+            let amount = parseInt(res.match[1], 10);
+            if(checkCoin(res, amount)) {
+              let user = db.users[getUserFromRes(res).id];
+              user.coin -= amount;
+              let rate = amount / GAME_COIN_GOOD;
+              let digitsUnlocked = Math.floor(GAME_DIGITS * rate);
+              res.reply(`The hint is ${shadow(game, digitsUnlocked)}, your balance is ${user.coin}`)
+            }
+          } else {
+            res.reply('You are not playing game!')
+          }
         }
-      } else {
-        res.reply('You are not playing game!')
-      }
+      });
     });
 
     // buy lottery
     robot.hear(/.*buy.+lottery.*/i, function(res){
       if (isMessageFromMyself(res)) return;
-
-      let amount = GAME_LOTTERY_PRICE;
-      if(checkCoin(res, GAME_LOTTERY_PRICE)) {
-        let user = db.users[getUserFromRes(res).id];
-        user.coin -= amount;
-        let sn = ++ticketSerial;
-        user.tickets.push(sn);
-        res.reply(`You brought lottery #${sn}. You have ${user.tickets.length} lottery(ies), balance ${user.coin}`);
-      }
+      checkPrivateRoom(res).then(function(isPrivateRoom) {
+        if (isPrivateRoom) {
+          let amount = GAME_LOTTERY_PRICE;
+          if(checkCoin(res, GAME_LOTTERY_PRICE)) {
+            let user = db.users[getUserFromRes(res).id];
+            user.coin -= amount;
+            let sn = ++ticketSerial;
+            user.tickets.push(sn);
+            res.reply(`You brought lottery #${sn}. You have ${user.tickets.length} lottery(ies), balance ${user.coin}`);
+          }
+        }
+      });
     });
 
     // my lottery
     robot.hear(/.*my.+lottery.*/i, function(res){
       if (isMessageFromMyself(res)) return;
 
-      let user = db.users[getUserFromRes(res).id];
-      if (!user) {
-        res.reply(`You never play any game`);
-      } if (user.tickets.length === 0) {
-        res.reply(`You have no lottery.`);
-      } else {
-        let msg = 'You have lottery(ies): ' + user.tickets.map(id => '#' + id ).join(', ');
-        res.reply(msg);
-      }
+      checkPrivateRoom(res).then(function(isPrivateRoom) {
+        if (isPrivateRoom) {
+          let user = db.users[getUserFromRes(res).id];
+          if (!user) {
+            res.reply(`You never play any game`);
+          } if (user.tickets.length === 0) {
+            res.reply(`You have no lottery.`);
+          } else {
+            let msg = 'You have lottery(ies): ' + user.tickets.map(id => '#' + id ).join(', ');
+            res.reply(msg);
+          }
+        }
+      });
     });
 
     robot.hear(/.*my.+coin.*/i, function(res){
       if (isMessageFromMyself(res)) return;
 
-      let user = db.users[getUserFromRes(res).id];
-      if (user) {
-        res.reply(`You have ${user.coin} coins.`);
-      } else {
-        res.reply(`You never play any game`);
-      }
+      checkPrivateRoom(res).then(function(isPrivateRoom) {
+        if (isPrivateRoom) {
+          let user = db.users[getUserFromRes(res).id];
+          if (user) {
+            res.reply(`You have ${user.coin} coins.`);
+          } else {
+            res.reply(`You never play any game`);
+          }
+        }
+      });
     });
 
     robot.hear(/cheese steak jimmy's/i, function(res){
       if (isMessageFromMyself(res)) return;
 
-      let { id: userId } = getUserFromRes(res);
-      if (!db.users[userId]) db.users[userId] = initUser();
+      checkPrivateRoom(res).then(function(isPrivateRoom) {
+        if (isPrivateRoom) {
+          let { id: userId } = getUserFromRes(res);
+          if (!db.users[userId]) db.users[userId] = initUser();
 
-      db.users[userId].coin += 1000;
-      res.reply(`You must be a big fan of Age Of Empire 2. ❤️`);
+          db.users[userId].coin += 1000;
+          res.reply(`You must be a big fan of Age Of Empire 2. ❤️`);
+        }
+      });
+
     });
 
     robot.hear(/i'm the boss/i, function(res){
       if (isMessageFromMyself(res)) return;
 
-      let { id: userId } = getUserFromRes(res);
-      if (!db.users[userId]) db.users[userId] = initUser();
-      db.users[userId].super = true;
+      checkPrivateRoom(res).then(function(isPrivateRoom) {
+        if (isPrivateRoom) {
+          let { id: userId } = getUserFromRes(res);
+          if (!db.users[userId]) db.users[userId] = initUser();
+          db.users[userId].super = true;
 
-      res.reply(`You have been grant super user privilege!`);
+          res.reply(`You have been grant super user privilege!`);
+        }
+      });
     });
 
     robot.hear(/(.+) lucky draw/i, function(res){
@@ -255,10 +291,10 @@ module.exports = function(robot) {
       let msg = `We have ${ticketSerial - ticketWon.length} lotteries in the ballot`;
 
       // richest
-      let richest = Object.keys(db.users).sort((a, b) => db.users[a].coin - db.users[b].coin).slice(0, 10);
+      let richest = Object.keys(db.users).sort((a, b) => db.users[a].coin - db.users[b].coin).reverse().slice(0, 10);
 
       // the most tickets
-      let ticketOwner = Object.keys(db.users).sort((a, b) => db.users[a].tickets.length - db.users[b].tickets.length).slice(0, 10);
+      let ticketOwner = Object.keys(db.users).sort((a, b) => db.users[a].tickets.length - db.users[b].tickets.length).reverse().slice(0, 10);
 
       let userIds = (function(arr){
         let tmp = {};
