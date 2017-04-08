@@ -6,13 +6,13 @@ Blottery is a lottery bot who help organization to having some competitions and 
 
 ## Competition
 
-Users should earn **coin** form playing games. And use the coin to purchase **lottery**.  The more lotteries a user have the better chance to win the prize.
+Users should earn **coin** form playing games. And use the coin to purchase **lottery ballot**.  The more ballots a user have, the better chance to win the prize.
 
 ## The Game 
 
 Blottery are playing a game called [Bulls and Cows](https://en.wikipedia.org/wiki/Bulls_and_Cows). The bot will randomly genterate 4 digits of non-repeated number. 
 
-The goal of this game is guess the exactly same answer. Each attempt the bot will given a hint from the guess. So players can follow the hint to solve real answer.
+The goal of this game is guess the exactly same number of the answer. Each attempt the bot will given a hint from the guess. So players can follow the hint to solve real answer.
 
 Based on the count of attempts, the bot will reward **maximun 100** coin to the winner.
 
