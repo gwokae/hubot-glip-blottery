@@ -166,8 +166,8 @@ module.exports = function(robot) {
       });
     });
 
-    // bride
-    robot.hear(/.*bride.*?\s([0-9]+).*/i, function(res){
+    // bribe
+    robot.hear(/.*bribe.*?\s([0-9]+).*/i, function(res){
       if (isMessageFromMyself(res)) return;
 
       checkPrivateRoom(res).then(function(isPrivateRoom) {
@@ -288,7 +288,7 @@ module.exports = function(robot) {
     robot.hear(/show rank/i, function(res){
       if (isMessageFromMyself(res)) return;
 
-      let msg = `We have ${ticketSerial - ticketWon.length} lotteries in the ballot`;
+      let msg = `We have ${ticketSerial - ticketWon.length} lotteries ballot in the box`;
 
       // richest
       let richest = Object.keys(db.users).sort((a, b) => db.users[a].coin - db.users[b].coin).reverse().slice(0, 10);
@@ -370,7 +370,7 @@ module.exports = function(robot) {
 
   function draw(res, itemName) {
     if( ticketSerial - ticketWon.length === 0 ){
-      res.reply(`No winner. Due to no lottery in the ballot`)
+      res.reply(`No winner. Due to no lottery ballot in the box`)
     } else {
       let rnd = Math.round(Math.random() * ticketSerial);
       if (rnd === 0 || ticketWon.indexOf(rnd) !== -1) {
