@@ -4,7 +4,7 @@ const GAME_DIGITS = (function(digit){
 })(parseInt(process.env.GAME_DIGITS, 10));
 const GAME_COIN_GOOD = 100;
 const GAME_COIN_BAD = 10;
-const GAME_GOOD_ATTEMPTS = 8;
+const GAME_GOOD_ATTEMPTS = 5;
 const GAME_BAD_ATTEMPTS = 20;
 const GAME_LOTTERY_PRICE = 100;
 const GlipClient = require('glip-client')
@@ -202,7 +202,7 @@ module.exports = function(robot) {
             user.coin -= amount;
             let sn = ++ticketSerial;
             user.tickets.push(sn);
-            res.reply(`You brought lottery #${sn}. You have ${user.tickets.length} lottery(ies), balance ${user.coin}`);
+            res.reply(`You brought lottery #${sn}. You have ${user.tickets.length} lottery ballot(s), balance ${user.coin}`);
           }
         }
       });
@@ -218,9 +218,9 @@ module.exports = function(robot) {
           if (!user) {
             res.reply(`You never play any game`);
           } if (user.tickets.length === 0) {
-            res.reply(`You have no lottery.`);
+            res.reply(`You have no lottery ballot.`);
           } else {
-            let msg = 'You have lottery(ies): ' + user.tickets.map(id => '#' + id ).join(', ');
+            let msg = 'You have lottery ballot(s): ' + user.tickets.map(id => '#' + id ).join(', ');
             res.reply(msg);
           }
         }
@@ -277,7 +277,7 @@ module.exports = function(robot) {
       let { id: userId } = getUserFromRes(res);
       let user = db.users[userId];
       if (user && user.super) {
-          res.reply(`Lucky draw from ${ticketSerial - ticketWon.length} lotteries`)
+          res.reply(`Lucky draw from ${ticketSerial - ticketWon.length} lottery ballot`)
 
           setTimeout(draw.bind(null, res, res.match[1]), Math.random() * 2000);
       } else {
@@ -288,7 +288,7 @@ module.exports = function(robot) {
     robot.hear(/show rank/i, function(res){
       if (isMessageFromMyself(res)) return;
 
-      let msg = `We have ${ticketSerial - ticketWon.length} lotteries ballot in the box`;
+      let msg = `We have ${ticketSerial - ticketWon.length} lottery ballot in the box`;
 
       // richest
       let richest = Object.keys(db.users).sort((a, b) => db.users[a].coin - db.users[b].coin).reverse().slice(0, 10);
@@ -316,7 +316,7 @@ module.exports = function(robot) {
             msg += '\n\n**Lottery Owner:**\n';
             msg += ticketOwner.map( (userId, idx) => {
               let user = users[userIds.indexOf(userId)];
-              return `**#${idx + 1}** ${user.firstName} ${user.lastName}: ${db.users[userId].tickets.length} lotteries`
+              return `**#${idx + 1}** ${user.firstName} ${user.lastName}: ${db.users[userId].tickets.length} lottery ballot(s)`
             }).join('\n');
           }
 

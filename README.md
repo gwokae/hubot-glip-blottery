@@ -10,7 +10,9 @@ Users should earn **coin** form playing games. And use the coin to purchase **lo
 
 ## The Game 
 
-Blottery are playing a game called [Bulls and Cows](https://en.wikipedia.org/wiki/Bulls_and_Cows). The bot will randomly genterate 4 digits of non-repeated number. And the player must guess the answer. Each attempt the bot will given a hint from the guess. So players can follow the hint to solve real answer.
+Blottery are playing a game called [Bulls and Cows](https://en.wikipedia.org/wiki/Bulls_and_Cows). The bot will randomly genterate 4 digits of non-repeated number. 
+
+The goal of this game is guess the exactly same answer. Each attempt the bot will given a hint from the guess. So players can follow the hint to solve real answer.
 
 Based on the count of attempts, the bot will reward **maximun 100** coin to the winner.
 
@@ -18,7 +20,7 @@ Based on the count of attempts, the bot will reward **maximun 100** coin to the 
 
 The hint will represent in **?A?B** format (? is a number). **A** means the count of both the number and position is correct and **B** means the count of number exists but in different position.
 
-For instance, assume the answer is 9487 and user guess 9876. The hint will be **1A2B**. Because 9 exists in the answer and also met correct position and 8, 7 exist in the answer but in a wrong position.
+For instance, assume the answer is 9487 and user guess 9876. The hint will be **1A2B**. Because 9 exists in the answer and also met correct position and 8, 7 exist in the answer but in a wrong position. So the goal is get **4A0B**.
 
 ### History
 
