@@ -49,3 +49,16 @@ A super user can conduct a lottery for some prize. And the bot will help to rand
 ## Magic
 
 The Age of Empire 2 fan will eventually win for some reason. 🤣
+
+## Start-up Sample
+
+```
+HUBOT_LOG_LEVEL='debug' \
+HUBOT_GLIP_APP_KEY='YOUR KEY' \
+HUBOT_GLIP_APP_SECRET='YOUR SECRET' \
+HUBOT_GLIP_USERNAME='RC USERNAME' \
+HUBOT_GLIP_EXTENSION='RC EXT.' \
+HUBOT_GLIP_PASSWORD='RC PASSWORD' \
+HUBOT_GLIP_SERVER='https://platform.devtest.ringcentral.com' \
+./bin/hubot-debug -a glip
+```
